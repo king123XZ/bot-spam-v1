@@ -1,5 +1,6 @@
 require("./settings");
 require("./lib/database");
+require("./autopost");
 
 const {
   default: makeWASocket,
