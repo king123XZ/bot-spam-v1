@@ -1,6 +1,6 @@
 require("./settings");
 require("./lib/database");
-require("./autopost");
+require("./autopost");   // <<=== ACTIVADO
 
 const {
   default: makeWASocket,
@@ -29,9 +29,8 @@ const mainHandler = require("./main");
 //   SISTEMA DE GRUPOS
 // ========================
 const gruposFile = "./data/grupos.json";
-if (!fs.existsSync(gruposFile)) {
-  fs.writeFileSync(gruposFile, JSON.stringify([]));
-}
+if (!fs.existsSync("./data")) fs.mkdirSync("./data");
+if (!fs.existsSync(gruposFile)) fs.writeFileSync(gruposFile, JSON.stringify([]));
 
 global.gruposAuto = JSON.parse(fs.readFileSync(gruposFile));
 
@@ -90,6 +89,9 @@ print("Fecha & Tiempo", new Date().toLocaleString("en-US", { timeZone: "America/
 console.log(chalk.yellow.bold("╚" + "═".repeat(30)));
 
 
+// ========================
+//       INICIO DEL BOT
+// ========================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(global.sessionName);
   const { version } = await fetchLatestBaileysVersion();
@@ -101,6 +103,9 @@ async function startBot() {
     browser: ["Linux", "Opera"],
     auth: state,
   });
+
+  global.client = client; // <<==== NECESARIO PARA AUTOPOST
+
 
   if (!client.authState.creds.registered) {
     const phoneNumber = await question(
@@ -159,7 +164,7 @@ async function startBot() {
 
 
   // ================================
-  //    DETECTAR GRUPOS AUTOMÁTICO
+  //     DETECTAR GRUPOS AUTOMÁTICO
   // ================================
   client.ev.on("group-participants.update", async (data) => {
     if (!data.id) return;
@@ -178,8 +183,7 @@ async function startBot() {
       let m = messages[0];
       if (!m.message) return;
 
-      m.message =
-        m.message.ephemeralMessage?.message || m.message;
+      m.message = m.message.ephemeralMessage?.message || m.message;
 
       if (m.key.remoteJid === "status@broadcast") return;
 
