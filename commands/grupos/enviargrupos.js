@@ -8,31 +8,27 @@ module.exports = {
 
     if (!global._enviar) global._enviar = {};
 
-    // Si el proceso NO inició
+    // Si NO hay proceso iniciando
     if (!global._enviar[sender]) {
       global._enviar[sender] = { step: 1 };
-      return m.reply("📤 *Paso 1:* Envíame AHORA una imagen/video/documento (SIN TEXTO).");
+      return m.reply("📤 *Paso 1:* Envíame AHORA una imagen/video/documento (sin texto).");
     }
 
     const data = global._enviar[sender];
     const step = data.step;
 
     // ---------------------------
-    // 🔥 PASO 1 → Recibir media
+    // PASO 1 → Recibir media
     // ---------------------------
     if (step === 1) {
       const msgType = m.mtype;
 
-      // Tipos válidos
-      const validMedia = ["imageMessage", "videoMessage", "documentMessage"];
+      const allowedTypes = ["imageMessage", "videoMessage", "documentMessage"];
+      if (!allowedTypes.includes(msgType))
+        return m.reply("❌ Debes enviar una imagen, video o archivo.");
 
-      if (!validMedia.includes(msgType))
-        return m.reply("❌ Debes enviar imagen, video o archivo SIN texto.");
-
-      // Descargar media
       const buffer = await client.downloadMediaMessage(m);
 
-      // Guardar
       data.media = buffer;
       data.mediaType =
         msgType === "imageMessage" ? "image" :
@@ -40,11 +36,11 @@ module.exports = {
 
       data.step = 2;
 
-      return m.reply("📤 *Paso 2:* Envíame ahora el *TEXTO* que llevará el mensaje.");
+      return m.reply("📤 *Paso 2:* Envíame el TEXTO que acompañará al envío.");
     }
 
     // ---------------------------
-    // 🔥 PASO 2 → Recibir texto
+    // PASO 2 → Recibir texto
     // ---------------------------
     if (step === 2) {
       if (!args.length)
@@ -53,25 +49,21 @@ module.exports = {
       data.text = args.join(" ");
       data.step = 3;
 
-      return m.reply(
-        "📤 *Paso 3:* Escribe:\n\n" +
-        "`/enviar` → para enviar a todos los grupos\n" +
-        "`/cancelar` → para cancelar"
-      );
+      return m.reply("📤 *Paso 3:* Escribe `/enviar` para confirmar o `/cancelar`.");
     }
 
     // ---------------------------
-    // 🔥 PASO 3 → Confirmar envío
+    // PASO 3 → Confirmación
     // ---------------------------
     if (step === 3) {
-      const option = args[0]?.toLowerCase();
+      const command = args[0]?.toLowerCase();
 
-      if (option === "cancelar") {
+      if (command === "cancelar") {
         delete global._enviar[sender];
         return m.reply("❌ Envío cancelado.");
       }
 
-      if (option !== "enviar")
+      if (command !== "enviar")
         return m.reply("❌ Escribe `/enviar` o `/cancelar`.");
 
       const grupos = global.gruposAuto || [];
@@ -89,7 +81,7 @@ module.exports = {
 
       delete global._enviar[sender];
 
-      return m.reply("✅ Mensaje enviado a todos los grupos correctamente.");
+      return m.reply("✅ Enviado correctamente a todos los grupos.");
     }
   }
 };
