@@ -8,40 +8,50 @@ module.exports = {
 
     if (!global._enviar) global._enviar = {};
 
-    // Si NO hay media guardada, el usuario está iniciando el proceso
+    // Si el proceso NO inició
     if (!global._enviar[sender]) {
       global._enviar[sender] = { step: 1 };
-      return m.reply("📤 *Paso 1:* Ahora envíame la imagen/video/documento que quieres enviar.");
+      return m.reply("📤 *Paso 1:* Envíame AHORA una imagen/video/documento (SIN TEXTO).");
     }
 
-    const step = global._enviar[sender].step;
+    const data = global._enviar[sender];
+    const step = data.step;
 
-    // Paso 1: Recibir media
+    // ---------------------------
+    // 🔥 PASO 1 → Recibir media
+    // ---------------------------
     if (step === 1) {
-      const mediaObj = m.message.imageMessage ||
-                       m.message.videoMessage ||
-                       m.message.documentMessage;
-      if (!mediaObj) return m.reply("❌ Debes enviar una imagen, video o documento.");
+      const msgType = m.mtype;
 
+      // Tipos válidos
+      const validMedia = ["imageMessage", "videoMessage", "documentMessage"];
+
+      if (!validMedia.includes(msgType))
+        return m.reply("❌ Debes enviar imagen, video o archivo SIN texto.");
+
+      // Descargar media
       const buffer = await client.downloadMediaMessage(m);
 
-      global._enviar[sender].media = buffer;
-      global._enviar[sender].mediaType = 
-        m.message.imageMessage ? "image" :
-        m.message.videoMessage ? "video" : "document";
+      // Guardar
+      data.media = buffer;
+      data.mediaType =
+        msgType === "imageMessage" ? "image" :
+        msgType === "videoMessage" ? "video" : "document";
 
-      global._enviar[sender].step = 2;
+      data.step = 2;
 
-      return m.reply("📤 *Paso 2:* Ahora envíame el *texto* que acompañará al mensaje.");
+      return m.reply("📤 *Paso 2:* Envíame ahora el *TEXTO* que llevará el mensaje.");
     }
 
-    // Paso 2: Recibir texto
+    // ---------------------------
+    // 🔥 PASO 2 → Recibir texto
+    // ---------------------------
     if (step === 2) {
-      if (!args || !args.length)
-        return m.reply("❌ Necesito un texto para enviar junto a la media.");
+      if (!args.length)
+        return m.reply("❌ Debes enviar un texto.");
 
-      global._enviar[sender].text = args.join(" ");
-      global._enviar[sender].step = 3;
+      data.text = args.join(" ");
+      data.step = 3;
 
       return m.reply(
         "📤 *Paso 3:* Escribe:\n\n" +
@@ -50,37 +60,37 @@ module.exports = {
       );
     }
 
-    // Paso 3: Esperar confirmación
+    // ---------------------------
+    // 🔥 PASO 3 → Confirmar envío
+    // ---------------------------
     if (step === 3) {
-      const cmd = args[0]?.toLowerCase();
+      const option = args[0]?.toLowerCase();
 
-      if (cmd === "cancelar") {
+      if (option === "cancelar") {
         delete global._enviar[sender];
-        return m.reply("❌ Proceso cancelado.");
+        return m.reply("❌ Envío cancelado.");
       }
 
-      if (cmd !== "enviar") {
+      if (option !== "enviar")
         return m.reply("❌ Escribe `/enviar` o `/cancelar`.");
-      }
 
-      // Enviar a todos los grupos
       const grupos = global.gruposAuto || [];
-      const { media, mediaType, text } = global._enviar[sender];
 
       for (const grupo of grupos) {
         try {
           await client.sendMessage(grupo, {
-            [mediaType]: media,
-            caption: text
+            [data.mediaType]: data.media,
+            caption: data.text
           });
         } catch (e) {
-          console.log("Error enviando a", grupo, e);
+          console.log("Error enviando a:", grupo, e);
         }
       }
 
       delete global._enviar[sender];
 
-      return m.reply("✅ Mensaje enviado correctamente a todos los grupos.");
+      return m.reply("✅ Mensaje enviado a todos los grupos correctamente.");
     }
   }
 };
+
