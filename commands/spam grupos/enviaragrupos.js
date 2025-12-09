@@ -1,24 +1,20 @@
 const fs = require("fs");
-const pathGrupos = "./groups.json";
 
-let estadoEnvio = {}; // Guardamos temporalmente la media y texto
+let estadoEnvio = {};
 
 module.exports = {
     command: ["enviaragrupos"],
-    description: "Enviar media + texto a todos los grupos con vista previa y confirmación",
+    description: "Envía media + texto a todos los grupos con confirmación",
     run: async (client, m) => {
+
         const sender = (m.key.participant || m.key.remoteJid).replace("@s.whatsapp.net","");
-        if(!global.owner.includes(sender)) return m.reply("❌ Solo el propietario puede usar este comando.");
+        if(!global.owner.includes(sender)) 
+            return m.reply("❌ Solo el owner puede usar este comando.");
 
-        if(!fs.existsSync(pathGrupos)) return m.reply("❌ No hay grupos guardados.");
-        const gruposGuardados = JSON.parse(fs.readFileSync(pathGrupos)).filter(g => g.id.endsWith("@g.us"));
-        if(gruposGuardados.length === 0) return m.reply("❌ No hay grupos guardados.");
-
-        // Estado temporal para este usuario
-        if(!estadoEnvio[sender]){
+        if(!estadoEnvio[sender]) {
             estadoEnvio[sender] = {
                 paso: 0,
-                media: null,
+                mediaBuffer: null,
                 mediaType: null,
                 caption: ""
             };
@@ -26,115 +22,107 @@ module.exports = {
 
         const estado = estadoEnvio[sender];
 
-        // Paso 0: pedir media
-        if(estado.paso === 0){
-            const tiposMedia = ["imageMessage","videoMessage","documentMessage"];
-            let mediaEncontrada = false;
+        // --------------------------
+        // PASO 0 → RECIBIR MEDIA
+        // --------------------------
+        if (estado.paso === 0) {
 
-            for (let tipo of tiposMedia){
-                if(m.message[tipo]){
+            const tipos = ["imageMessage","videoMessage","documentMessage"];
+            let encontrado = false;
+
+            for (let tipo of tipos) {
+                if (m.message[tipo]) {
                     estado.mediaType = tipo.replace("Message","").toLowerCase();
-                    estado.caption = m.message[tipo].caption || "";
+                    
                     try {
-                        estado.media = await client.downloadMediaMessage({ message: m.message });
-                        mediaEncontrada = true;
-                        break;
-                    } catch(err){
-                        console.log("⚠️ Error descargando media:", err.message);
-                        m.reply("❌ No se pudo descargar la media. Intenta de nuevo.");
-                        return;
+                        // Aquí NO usamos m.message directamente → evitamos empty media key
+                        const buffer = await client.downloadMediaMessage(m);
+                        estado.mediaBuffer = buffer;
+                        estado.caption = m.message[tipo].caption || "";
+                        encontrado = true;
+                    } catch (err) {
+                        console.log("Error descargando media:", err);
+                        return m.reply("❌ No pude descargar la media, vuelve a enviarla.");
                     }
                 }
             }
 
-            if(!mediaEncontrada){
-                return m.reply("❌ Por favor envía primero la imagen, video o documento que quieres enviar.");
-            }
+            if (!encontrado)
+                return m.reply("📸 Envíame una imagen, video o documento.\nLuego escribe el comando:\n\n/enviaragrupos");
 
             estado.paso = 1;
-            return m.reply("✅ Media recibida. Ahora envía el texto que acompañará la media.");
+            return m.reply("✅ Media recibida.\nAhora envía el texto que acompañará la imagen o video.");
         }
 
-        // Paso 1: recibir texto
-        if(estado.paso === 1){
-            estado.caption = m.text || m.message?.conversation || estado.caption;
+        // --------------------------
+        // PASO 1 → RECIBIR TEXTO
+        // --------------------------
+        if (estado.paso === 1) {
+
+            if (!m.text)
+                return m.reply("✏️ Envíame el texto que acompañará la media.");
+
+            estado.caption = m.text;
             estado.paso = 2;
 
-            // Mostrar vista previa
-            let tipo = estado.mediaType;
-            let buffer = estado.media;
-            let previewMsg = `📄 Vista previa:\nTipo: ${tipo}\nTexto: ${estado.caption}\n\nEscribe /enviar para enviar a todos los grupos o /cancelar para cancelar.`;
+            // Vista previa
+            const previewJid = sender + "@s.whatsapp.net";
 
-            if(tipo === "image") await client.sendMessage(sender+"@s.whatsapp.net",{image:buffer,caption:estado.caption});
-            else if(tipo === "video") await client.sendMessage(sender+"@s.whatsapp.net",{video:buffer,caption:estado.caption});
-            else if(tipo === "document") await client.sendMessage(sender+"@s.whatsapp.net",{document:buffer,caption:estado.caption});
-            else await client.sendMessage(sender+"@s.whatsapp.net",{text:previewMsg});
+            if (estado.mediaType === "image")
+                await client.sendMessage(previewJid, { image: estado.mediaBuffer, caption: estado.caption });
+            else if (estado.mediaType === "video")
+                await client.sendMessage(previewJid, { video: estado.mediaBuffer, caption: estado.caption });
+            else
+                await client.sendMessage(previewJid, { document: estado.mediaBuffer, mimetype: "application/octet-stream", caption: estado.caption });
 
-            await m.reply(previewMsg);
-            return;
+            return m.reply(
+                "📄 *Vista previa enviada a tu chat privado*\n\n" +
+                "✔ Si se ve bien, escribe: /enviar\n" +
+                "❌ Para cancelar: /cancelar"
+            );
         }
 
-        // Paso 2: confirmar envío
-        if(estado.paso === 2){
-            if(m.text === "/enviar"){
-                // Filtrar grupos privados y excluidos
-                const gruposExcluidos = [
-                    "51917391317@s.whatsapp.net",
-                    "120363401477412280@g.us"
-                ];
-                const gruposAEnviar = [];
-                const gruposPrivados = [];
+        // --------------------------
+        // PASO 2 → CONFIRMAR ENVÍO
+        // --------------------------
+        if (estado.paso === 2) {
 
-                for(const grupo of gruposGuardados){
-                    const grupoId = grupo.id;
-                    if(gruposExcluidos.includes(grupoId)) continue;
-
-                    try{
-                        const metadata = await client.groupMetadata(grupoId);
-                        const soyAdmin = metadata.participants.find(p => p.id === sender)?.admin || false;
-
-                        if(metadata.restrict && !soyAdmin){
-                            gruposPrivados.push(metadata.subject);
-                        } else {
-                            gruposAEnviar.push(grupoId);
-                        }
-                    } catch(err){
-                        console.log(`Error metadata ${grupoId}: ${err.message}`);
-                    }
-                }
-
-                if(gruposPrivados.length>0){
-                    await m.reply(`⚠️ No se enviará mensaje a estos grupos (solo admins pueden escribir):\n- ${gruposPrivados.join("\n- ")}`);
-                }
-
-                const retraso = 10000;
-                for(const grupoId of gruposAEnviar){
-                    try{
-                        if(estado.media && estado.mediaType){
-                            switch(estado.mediaType){
-                                case "image": await client.sendMessage(grupoId,{image:estado.media,caption:estado.caption}); break;
-                                case "video": await client.sendMessage(grupoId,{video:estado.media,caption:estado.caption}); break;
-                                case "document": await client.sendMessage(grupoId,{document:estado.media,caption:estado.caption}); break;
-                            }
-                        } else {
-                            await client.sendMessage(grupoId,{text:estado.caption});
-                        }
-                        await new Promise(r=>setTimeout(r,retraso));
-                    } catch(err){
-                        console.log(`Error enviando a ${grupoId}: ${err.message}`);
-                    }
-                }
-
-                await m.reply("✅ Mensaje enviado a todos los grupos.");
-                estadoEnvio[sender] = null; // limpiar estado
-                return;
-
-            } else if(m.text === "/cancelar"){
+            if (m.text === "/cancelar") {
                 estadoEnvio[sender] = null;
                 return m.reply("❌ Envío cancelado.");
-            } else {
-                return m.reply("⚠️ Escribe /enviar para enviar o /cancelar para cancelar.");
             }
+
+            if (m.text !== "/enviar")
+                return m.reply("⚠️ Escribe /enviar para enviar o /cancelar para cancelar.");
+
+            // Obtener TODOS los grupos automáticamente
+            const grupos = await client.groupFetchAllParticipating();
+            const ids = Object.values(grupos).map(g => g.id);
+
+            if (ids.length === 0)
+                return m.reply("❌ No estoy en ningún grupo.");
+
+            m.reply(`📢 Enviando mensaje a *${ids.length} grupos*...\n⏳ Esto tardará un poco.`);
+
+            // Enviar con retraso anti-baneo
+            for (const groupId of ids) {
+                try {
+                    if (estado.mediaType === "image")
+                        await client.sendMessage(groupId, { image: estado.mediaBuffer, caption: estado.caption });
+                    else if (estado.mediaType === "video")
+                        await client.sendMessage(groupId, { video: estado.mediaBuffer, caption: estado.caption });
+                    else
+                        await client.sendMessage(groupId, { document: estado.mediaBuffer, caption: estado.caption });
+
+                    await new Promise(r => setTimeout(r, 9000)); // 9 segundos anti-baneo
+                } catch (err) {
+                    console.log(`Error enviando a ${groupId}:`, err);
+                }
+            }
+
+            estadoEnvio[sender] = null;
+            return m.reply("✅ *Mensaje enviado a todos los grupos correctamente.*");
         }
     }
 };
+
