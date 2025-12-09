@@ -10,10 +10,37 @@ const initDB = require("./lib/system/initDB");
 const antilink = require("./commands/antilink");
 const { resolveLidToRealJid } = require("./lib/utils");
 
-// 🔥 Carga de comandos
+// 🔥 CARGA DE COMANDOS
 seeCommands();
 
+// 🟦 BASE PARA MULTIPASO (enviaragrupos)
+if (!global._enviar) global._enviar = {};
+
 module.exports = async (client, m) => {
+  const sender = m.sender || m.key.participant || m.key.remoteJid;
+
+  // ======================================================================
+  //      🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
+  // ======================================================================
+  if (
+    global._enviar[sender] && 
+    !m.message?.buttonsResponseMessage &&
+    !m.message?.templateButtonReplyMessage &&
+    !m.body?.startsWith(".") // ignorar comandos
+  ) {
+    const cmd = global.comandos.get("enviaragrupos");
+    if (cmd) {
+      try {
+        return await cmd.run(client, m, [], {});
+      } catch (err) {
+        console.log("Error multipaso enviaragrupos:", err);
+      }
+    }
+  }
+
+  // ======================================================================
+  //                     🔥 DETECTAR MENSAJE NORMAL
+  // ======================================================================
   let body = "";
 
   if (m.message) {
@@ -54,11 +81,14 @@ module.exports = async (client, m) => {
     .toLowerCase();
 
   const pushname = m.pushName || "Sin nombre";
-  const sender = m.isGroup
+  const realSender = m.isGroup
     ? m.key.participant || m.participant
     : m.key.remoteJid;
 
-  // Grupo
+  // ======================================================================
+  //                           🔥 DATOS DEL GRUPO
+  // ======================================================================
+
   let groupMetadata, groupAdmins, resolvedAdmins = [], groupName = "";
 
   if (m.isGroup) {
@@ -84,10 +114,13 @@ module.exports = async (client, m) => {
     : false;
 
   const isAdmins = m.isGroup
-    ? resolvedAdmins.some((p) => p.jid === m.sender)
+    ? resolvedAdmins.some((p) => p.jid === realSender)
     : false;
 
-  // Consola
+  // ======================================================================
+  //                        🔥 REGISTRO EN CONSOLA
+  // ======================================================================
+
   const h = chalk.bold.blue("************************************");
   const v = chalk.bold.white("*");
 
@@ -98,28 +131,33 @@ module.exports = async (client, m) => {
     `\n${v} Usuario: ${chalk.whiteBright(pushname)}`
   );
   const senderPrint = chalk.bold.magentaBright(
-    `\n${v} Remitente: ${gradient("deepskyblue", "darkorchid")(sender)}`
+    `\n${v} Remitente: ${gradient("deepskyblue", "darkorchid")(realSender)}`
   );
   const groupPrint = m.isGroup
     ? chalk.bold.cyanBright(
-        `\n${v} Grupo: ${chalk.greenBright(groupName)}\n${v} ID: ${gradient("violet", "midnightblue")(from)}\n`
+        `\n${v} Grupo: ${chalk.greenBright(groupName)}\n${v} ID: ${gradient(
+          "violet",
+          "midnightblue"
+        )(from)}\n`
       )
     : chalk.bold.greenBright(`\n${v} Chat privado\n`);
 
   console.log(`\n${h}${date}${userPrint}${senderPrint}${groupPrint}${h}`);
 
-  // 📌 Ejecución de comando
+  // ======================================================================
+  //                       🔥 EJECUTAR COMANDO NORMAL
+  // ======================================================================
+
   if (global.comandos.has(command)) {
     const cmd = global.comandos.get(command);
 
-    // Permisos del comando
+    // Permisos
     if (
       cmd.isOwner &&
-      !global.owner.map((num) => num + "@s.whatsapp.net").includes(m.sender)
-    )
-      return m.reply("⚠️ Solo el owner puede usar este comando.");
+      !global.owner.map((num) => num + "@s.whatsapp.net").includes(realSender)
+    ) return m.reply("⚠️ Solo el owner puede usar este comando.");
 
-    if (cmd.isReg && !db.data.users[m.sender]?.registered)
+    if (cmd.isReg && !db.data.users[realSender]?.registered)
       return m.reply("⚠️ Debes registrarte.");
 
     if (cmd.isGroup && !m.isGroup)
@@ -134,7 +172,7 @@ module.exports = async (client, m) => {
     if (cmd.isPrivate && m.isGroup)
       return m.reply("⚠️ Este comando solo funciona en privado.");
 
-    // Ejecutar
+    // Ejecutar comando
     try {
       await cmd.run(client, m, args, { text });
     } catch (error) {
@@ -161,4 +199,4 @@ fs.watchFile(mainFile, () => {
   require(mainFile);
 });
 
-// Mini Lurus © 2025 - Creado por Zam  | GataNina-Li | DevAlexJs | Elrebelde21
+// Mini Lurus © 2025 - Creado por Zam  | GataNina-Li | DevAlexJs | El
