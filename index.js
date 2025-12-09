@@ -21,9 +21,25 @@ const { smsg } = require("./lib/message");
 const { Boom } = require("@hapi/boom");
 const { exec } = require("child_process");
 
-const mainHandler = require("./main"); // << CORRECTO
+const mainHandler = require("./main");
 
-// Logs
+
+// ========================
+//   SISTEMA DE GRUPOS
+// ========================
+const gruposFile = "./data/grupos.json";
+if (!fs.existsSync(gruposFile)) {
+  fs.writeFileSync(gruposFile, JSON.stringify([]));
+}
+
+global.gruposAuto = JSON.parse(fs.readFileSync(gruposFile));
+
+function guardarGrupos() {
+  fs.writeFileSync(gruposFile, JSON.stringify(global.gruposAuto, null, 2));
+}
+// ========================
+
+
 const print = (label, value) =>
   console.log(
     `${chalk.green.bold("║")} ${chalk.cyan.bold(label.padEnd(16))}${chalk.magenta.bold(":")} ${value}`
@@ -47,7 +63,6 @@ const log = {
   error: (msg) => console.log(chalk.bgRed.white.bold(`ERROR`), chalk.redBright(msg)),
 };
 
-// Info del sistema
 const userInfoSyt = () => {
   try {
     return os.userInfo().username;
@@ -56,7 +71,7 @@ const userInfoSyt = () => {
   }
 };
 
-// Banner
+
 console.log(
   chalk.yellow.bold(
     `╔═════[${`${chalk.yellowBright(userInfoSyt())}${chalk.white.bold("@")}${chalk.yellowBright(os.hostname())}`}]═════`
@@ -73,6 +88,7 @@ print("Baileys", `WhiskeySockets/baileys`);
 print("Fecha & Tiempo", new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City", hour12: false }));
 console.log(chalk.yellow.bold("╚" + "═".repeat(30)));
 
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(global.sessionName);
   const { version } = await fetchLatestBaileysVersion();
@@ -85,7 +101,6 @@ async function startBot() {
     auth: state,
   });
 
-  // Registro inicial
   if (!client.authState.creds.registered) {
     const phoneNumber = await question(
       log.warn("Ingrese su número de WhatsApp\n") +
@@ -103,11 +118,10 @@ async function startBot() {
     }
   }
 
-  // Base de datos
+
   await global.loadDatabase();
   console.log(chalk.yellow("Base de datos cargada correctamente."));
 
-  // Evento de conexión
   client.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
 
@@ -142,7 +156,22 @@ async function startBot() {
     if (connection === "open") log.success("Su conexión fue exitosa");
   });
 
-  // RECIBIR MENSAJES (arreglado)
+
+  // ================================
+  //    DETECTAR GRUPOS AUTOMÁTICO
+  // ================================
+  client.ev.on("group-participants.update", async (data) => {
+    if (!data.id) return;
+
+    if (!global.gruposAuto.includes(data.id)) {
+      global.gruposAuto.push(data.id);
+      guardarGrupos();
+      console.log(chalk.green(`Nuevo grupo detectado y guardado: ${data.id}`));
+    }
+  });
+  // ================================
+
+
   client.ev.on("messages.upsert", async ({ messages }) => {
     try {
       let m = messages[0];
@@ -155,13 +184,13 @@ async function startBot() {
 
       m = smsg(client, m);
 
-      // ✅ CORRECTO: solo 2 parámetros
       await mainHandler(client, m);
 
     } catch (err) {
       console.log("Error en handler:", err);
     }
   });
+
 
   client.decodeJid = (jid) => {
     if (!jid) return jid;
@@ -177,7 +206,6 @@ async function startBot() {
 
 startBot();
 
-// Auto-reload
 let file = require.resolve(__filename);
 fs.watchFile(file, () => {
   fs.unwatchFile(file);
