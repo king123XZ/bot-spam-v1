@@ -13,15 +13,30 @@ const { resolveLidToRealJid } = require("./lib/utils");
 // 🔥 CARGA DE COMANDOS
 seeCommands();
 
-// 🟦 BASE PARA MULTIPASO (enviaragrupos)
+// 🟦 BASE MULTIPASO
 if (!global._enviar) global._enviar = {};
-if (!global._enviar_warned) global._enviar_warned = {};  // 🔥 evita spam
+if (!global._enviar_warned) global._enviar_warned = {};
+
+// =============================================
+// 🔥 DETECTOR UNIVERSAL DE IMÁGENES BAILEYS
+// =============================================
+function hasImageMessage(msg) {
+  return (
+    msg.message?.imageMessage ||
+    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
+    msg.message?.documentWithCaptionMessage?.message?.imageMessage ||
+    msg.msg?.imageMessage ||
+    msg.imageMessage ||
+    false
+  );
+}
 
 module.exports = async (client, m) => {
+
   const sender = m.sender || m.key.participant || m.key.remoteJid;
 
   // ======================================================================
-  //      🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
+  //      🔥 SISTEMA MULTIPASO — enviaragrupos
   // ======================================================================
   if (
     global._enviar[sender] &&
@@ -36,22 +51,23 @@ module.exports = async (client, m) => {
 
     if (cmd) {
       try {
-        // Detectar si mandó imagen
-        const hasImage = !!m.message?.imageMessage;
+        // 🟢 Nuevo detector universal
+        const hasImage = hasImageMessage(m);
 
         if (!hasImage) {
-          // ❗ Solo avisar UNA VEZ, sin spam
           if (!global._enviar_warned[sender]) {
             global._enviar_warned[sender] = true;
 
-            await client.sendMessage(m.chat, {
-              text: "⚠️ Debes enviar una imagen.\nVuelve a intentarlo."
-            }, { quoted: m });
+            await client.sendMessage(
+              m.chat,
+              { text: "⚠️ Debes enviar una imagen.\nInténtalo otra vez." },
+              { quoted: m }
+            );
           }
           return;
         }
 
-        // Si envió la imagen → limpiar el anti-spam
+        // Si envía imagen, limpiamos el aviso
         delete global._enviar_warned[sender];
 
         return await cmd.run(client, m, [], {});
@@ -92,7 +108,6 @@ module.exports = async (client, m) => {
   const prefix = prefa.find((p) => body.startsWith(p));
   if (!prefix) return;
 
-  // Datos básicos
   const from = m.key.remoteJid;
   const args = body.trim().split(/ +/).slice(1);
   const text = args.join(" ");
@@ -175,7 +190,6 @@ module.exports = async (client, m) => {
   if (global.comandos.has(command)) {
     const cmd = global.comandos.get(command);
 
-    // Permisos
     if (
       cmd.isOwner &&
       !global.owner.map((num) => num + "@s.whatsapp.net").includes(realSender)
@@ -196,7 +210,6 @@ module.exports = async (client, m) => {
     if (cmd.isPrivate && m.isGroup)
       return m.reply("⚠️ Este comando solo funciona en privado.");
 
-    // Ejecutar comando
     try {
       await cmd.run(client, m, args, { text });
     } catch (error) {
@@ -223,4 +236,4 @@ fs.watchFile(mainFile, () => {
   require(mainFile);
 });
 
-// Mini Lurus © 2025 - Creado por Zam  | GataNina-Li | DevAlexJs | El
+// Mini Lurus © 2025 - Creado por Zam | Adaptado para YerTX2
