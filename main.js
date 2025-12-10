@@ -15,32 +15,49 @@ seeCommands();
 
 // 🟦 BASE PARA MULTIPASO (enviaragrupos)
 if (!global._enviar) global._enviar = {};
+if (!global._warned) global._warned = {}; // ⭐ Nueva protección anti-spam
 
 module.exports = async (client, m) => {
   const sender = m.sender || m.key.participant || m.key.remoteJid;
 
   // ======================================================================
-  //      🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
+  // 🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
   // ======================================================================
+
   if (
     global._enviar[sender] && 
     !m.message?.buttonsResponseMessage &&
     !m.message?.templateButtonReplyMessage &&
-    !m.body?.startsWith(".") // ignorar comandos
+    !m.body?.startsWith(".")
   ) {
-    const cmd = global.comandos.get("enviaragrupos");
-    if (cmd) {
-      try {
-        return await cmd.run(client, m, [], {});
-      } catch (err) {
-        console.log("Error multipaso enviaragrupos:", err);
+
+    // ⭐ Si envía una imagen → ejecutar multipaso sin errores ni spam
+    if (m.message?.imageMessage) {
+      global._warned[sender] = false;
+      const cmd = global.comandos.get("enviaragrupos");
+      if (cmd) {
+        try {
+          return await cmd.run(client, m, [], {});
+        } catch (err) {
+          console.log("Error multipaso enviaragrupos:", err);
+        }
       }
+      return;
     }
+
+    // ⭐ Anti-spam: solo se envía una vez si NO envía imagen
+    if (!global._warned[sender]) {
+      global._warned[sender] = true;
+      return m.reply("⚠️ Debes enviar una *imagen* para continuar.");
+    }
+
+    return;
   }
 
   // ======================================================================
   //                     🔥 DETECTAR MENSAJE NORMAL
   // ======================================================================
+
   let body = "";
 
   if (m.message) {
@@ -86,7 +103,7 @@ module.exports = async (client, m) => {
     : m.key.remoteJid;
 
   // ======================================================================
-  //                           🔥 DATOS DEL GRUPO
+  //                            🔥 DATOS DEL GRUPO
   // ======================================================================
 
   let groupMetadata, groupAdmins, resolvedAdmins = [], groupName = "";
@@ -199,4 +216,4 @@ fs.watchFile(mainFile, () => {
   require(mainFile);
 });
 
-// Mini Lurus © 2025 - Creado por Zam  | GataNina-Li | DevAlexJs | El
+// Mini Lurus © 2025 - Creado por Zam | GataNina-Li | DevAlexJs | El
