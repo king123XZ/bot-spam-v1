@@ -15,43 +15,50 @@ seeCommands();
 
 // 🟦 BASE PARA MULTIPASO (enviaragrupos)
 if (!global._enviar) global._enviar = {};
-if (!global._warned) global._warned = {}; // ⭐ Nueva protección anti-spam
+if (!global._enviar_warned) global._enviar_warned = {};  // 🔥 evita spam
 
 module.exports = async (client, m) => {
   const sender = m.sender || m.key.participant || m.key.remoteJid;
 
   // ======================================================================
-  // 🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
+  //      🔥 SISTEMA MULTIPASO — SI EL USUARIO YA INICIÓ enviaragrupos
   // ======================================================================
-
   if (
-    global._enviar[sender] && 
+    global._enviar[sender] &&
     !m.message?.buttonsResponseMessage &&
     !m.message?.templateButtonReplyMessage &&
-    !m.body?.startsWith(".")
+    !m.body?.startsWith(".") &&
+    !m.body?.startsWith("/") &&
+    !m.body?.startsWith("!") &&
+    !m.body?.startsWith("#")
   ) {
+    const cmd = global.comandos.get("enviaragrupos");
 
-    // ⭐ Si envía una imagen → ejecutar multipaso sin errores ni spam
-    if (m.message?.imageMessage) {
-      global._warned[sender] = false;
-      const cmd = global.comandos.get("enviaragrupos");
-      if (cmd) {
-        try {
-          return await cmd.run(client, m, [], {});
-        } catch (err) {
-          console.log("Error multipaso enviaragrupos:", err);
+    if (cmd) {
+      try {
+        // Detectar si mandó imagen
+        const hasImage = !!m.message?.imageMessage;
+
+        if (!hasImage) {
+          // ❗ Solo avisar UNA VEZ, sin spam
+          if (!global._enviar_warned[sender]) {
+            global._enviar_warned[sender] = true;
+
+            await client.sendMessage(m.chat, {
+              text: "⚠️ Debes enviar una imagen.\nVuelve a intentarlo."
+            }, { quoted: m });
+          }
+          return;
         }
+
+        // Si envió la imagen → limpiar el anti-spam
+        delete global._enviar_warned[sender];
+
+        return await cmd.run(client, m, [], {});
+      } catch (err) {
+        console.log("Error multipaso enviaragrupos:", err);
       }
-      return;
     }
-
-    // ⭐ Anti-spam: solo se envía una vez si NO envía imagen
-    if (!global._warned[sender]) {
-      global._warned[sender] = true;
-      return m.reply("⚠️ Debes enviar una *imagen* para continuar.");
-    }
-
-    return;
   }
 
   // ======================================================================
@@ -103,7 +110,7 @@ module.exports = async (client, m) => {
     : m.key.remoteJid;
 
   // ======================================================================
-  //                            🔥 DATOS DEL GRUPO
+  //                           🔥 DATOS DEL GRUPO
   // ======================================================================
 
   let groupMetadata, groupAdmins, resolvedAdmins = [], groupName = "";
@@ -216,4 +223,4 @@ fs.watchFile(mainFile, () => {
   require(mainFile);
 });
 
-// Mini Lurus © 2025 - Creado por Zam | GataNina-Li | DevAlexJs | El
+// Mini Lurus © 2025 - Creado por Zam  | GataNina-Li | DevAlexJs | El
