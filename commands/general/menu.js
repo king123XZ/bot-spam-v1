@@ -1,11 +1,9 @@
+const axios = require("axios");
+
 module.exports = {
   command: ["menu", "help", "ayuda", "panel"],
 
   run: async (client, m, { prefix }) => {
-
-    // ============================
-    // 🔒 PERMISOS (SOLO OWNER)
-    // ============================
 
     const owners = [
       "51917391317@s.whatsapp.net",
@@ -15,10 +13,6 @@ module.exports = {
     if (!owners.includes(m.sender)) {
       return m.reply("🚫 *Este comando solo puede usarlo el OWNER del bot.*");
     }
-
-    // ============================
-    // 🔘 BOTONES
-    // ============================
 
     const buttons = [
       {
@@ -38,16 +32,15 @@ module.exports = {
       }
     ];
 
-    // ============================
-    // 📌 MENSAJE ÚNICO (VIEWONCE)
-    // ============================
+    // 🔥 DESCARGAR IMAGEN COMO BUFFER
+    const imageUrl = "https://i.ibb.co/XxdTkYNq/menu.png";
+    const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
+    const imageBuffer = Buffer.from(response.data, "binary");
 
+    // 🔥 MENSAJE ÚNICO CON IMAGEN + TEXTO + BOTONES
     await client.sendMessage(m.chat, {
-      viewOnceMessage: {
-        message: {
-          imageMessage: {
-            url: "https://i.ibb.co/XxdTkYNq/menu.png",
-            caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 ⧽
+      image: imageBuffer,
+      caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 ⧽
 
 👤 Usuario: ${m.pushName}
 🕶️ Acceso: OWNER
@@ -62,14 +55,10 @@ Cuando tu número se conecta al servidor, los grupos donde estés se escanean au
 
 👨‍💻 Creador: *dvyer*
 
-🧠 *Selecciona una opción del sistema:*`
-          }
-        }
-      },
-      buttons,
+🧠 *Selecciona una opción del sistema:*`,
       footer: "YerTX Bot • Panel Hacker",
-      headerType: 4
+      buttons,
+      headerType: 1
     });
   }
 };
-
