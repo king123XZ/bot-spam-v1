@@ -14,32 +14,14 @@ module.exports = {
       return m.reply("🚫 *Este comando solo puede usarlo el OWNER del bot.*");
     }
 
+    // 🔹 BOTONES: Solo botones internos + urlButton para contacto
     const buttons = [
-      {
-        buttonId: `${prefix}.enviaragrupos`,
-        buttonText: { displayText: "📤 Enviar a Grupos" },
-        type: 1
-      },
-      {
-        buttonId: `${prefix}.grupos`,
-        buttonText: { displayText: "📋 Listar Grupos" },
-        type: 1
-      },
-      {
-        buttonId: "https://wa.me/51907376960",
-        buttonText: { displayText: "👨‍💻 Contactar Creador" },
-        type: 1
-      }
+      { buttonId: `${prefix}enviaragrupos`, buttonText: { displayText: "📤 Enviar a Grupos" }, type: 1 },
+      { buttonId: `${prefix}grupos`, buttonText: { displayText: "📋 Listar Grupos" }, type: 1 }
     ];
 
-    // 🔥 DESCARGAR IMAGEN COMO BUFFER
-    const imageUrl = "https://i.ibb.co/XxdTkYNq/menu.png";
-    const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
-    const imageBuffer = Buffer.from(response.data, "binary");
-
-    // 🔥 MENSAJE ÚNICO CON IMAGEN + TEXTO + BOTONES
-    await client.sendMessage(m.chat, {
-      image: imageBuffer,
+    const buttonMessage = {
+      image: { url: "https://i.ibb.co/XxdTkYNq/menu.png" },
       caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 ⧽
 
 👤 Usuario: ${m.pushName}
@@ -58,7 +40,11 @@ Cuando tu número se conecta al servidor, los grupos donde estés se escanean au
 🧠 *Selecciona una opción del sistema:*`,
       footer: "YerTX Bot • Panel Hacker",
       buttons,
-      headerType: 1
-    });
+      headerType: 4, // obligatorio para botones
+      urlButton: { displayText: "👨‍💻 Contactar Creador", url: "https://wa.me/51907376960" }
+    };
+
+    // 🔹 Enviar MENÚ único
+    await client.sendMessage(m.chat, buttonMessage);
   }
 };
