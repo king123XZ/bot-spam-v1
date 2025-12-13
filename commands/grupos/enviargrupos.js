@@ -5,6 +5,9 @@ module.exports = {
   run: async (client, m) => {
     const sender = m.sender || m.key.remoteJid;
 
+    // ⏱️ función delay
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
     // INICIAR PROCESO
     if (!global._enviar[sender]) {
       global._enviar[sender] = { step: 1 };
@@ -43,7 +46,10 @@ module.exports = {
         text,
       };
 
-      return m.reply("✅ Mensaje recibido, enviando a grupos...");
+      return m.reply(
+        "✅ Mensaje recibido.\n" +
+        "📡 Enviando a grupos con retraso de *10 segundos* por grupo..."
+      );
     }
 
     // PASO 2 → ENVIAR A TODOS LOS GRUPOS
@@ -68,13 +74,18 @@ module.exports = {
           } else {
             await client.sendMessage(jid, { text });
           }
+
           enviados++;
+
+          // ⏳ RETRASO DE 10 SEGUNDOS (ANTI-BAN)
+          await delay(10_000);
+
         } catch (e) {
-          console.log("Error enviando:", jid, e.message);
+          console.log("❌ Error enviando:", jid, e.message);
         }
       }
 
-      return m.reply(`📡 Enviado a *${enviados}* grupos.`);
+      return m.reply(`📡 Enviado a *${enviados}* grupos con seguridad.`);
     }
   }
 };
