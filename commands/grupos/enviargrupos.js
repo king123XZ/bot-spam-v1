@@ -1,85 +1,80 @@
 module.exports = {
   command: ["enviaragrupos"],
-  description: "Envía un mensaje o imagen a todos los grupos",
   isOwner: true,
 
   run: async (client, m) => {
     const sender = m.sender || m.key.remoteJid;
 
-    // Si NO hay proceso iniciado aún
+    // INICIAR PROCESO
     if (!global._enviar[sender]) {
       global._enviar[sender] = { step: 1 };
       return m.reply(
-        "📤 *Modo enviar a grupos activado*\n\n" +
+        "📤 *Enviar a grupos activado*\n\n" +
         "Ahora envíame:\n" +
         "👉 Texto o\n👉 Imagen con texto\n\n" +
-        "Y lo reenviaré a todos los grupos."
+        "Se reenviará a todos los grupos."
       );
     }
 
-    // SI YA ESTÁ EN EL PASO 1 → Recibir imagen o texto
+    // PASO 1 → CAPTURAR MENSAJE
     if (global._enviar[sender].step === 1) {
+      const imgMsg = m.message?.imageMessage;
 
-      // Detectar IMAGEN
-      const img = m.message?.imageMessage;
-
-      // Detectar TEXTO
       const text =
         m.message?.conversation ||
         m.message?.extendedTextMessage?.text ||
-        img?.caption ||
+        imgMsg?.caption ||
         "";
 
-      if (!img && !text) {
-        return m.reply("⚠️ Envíame una imagen o texto.");
+      if (!imgMsg && !text) {
+        return m.reply("⚠️ Envíame texto o una imagen.");
       }
 
-      // Guardamos el mensaje ORIGINAL
+      let imageBuffer = null;
+
+      // 🔥 DESCARGAR IMAGEN COMO BUFFER (CORRECTO)
+      if (imgMsg) {
+        imageBuffer = await client.downloadMediaMessage(m);
+      }
+
       global._enviar[sender] = {
         step: 2,
-        image: img || null,
-        text: text || null,
+        image: imageBuffer,
+        text,
       };
 
-      return m.reply(
-        "✅ *Perfecto!*\n\n" +
-        "Ahora se va a enviar a todos los grupos…"
-      );
+      return m.reply("✅ Mensaje recibido, enviando a grupos...");
     }
 
-    // PASO 2 — Enviar a todos los grupos
+    // PASO 2 → ENVIAR A TODOS LOS GRUPOS
     if (global._enviar[sender].step === 2) {
       const { image, text } = global._enviar[sender];
-
       delete global._enviar[sender];
       delete global._enviar_warned?.[sender];
 
-      const chats = await client.groupFetchAllParticipating();
-      const groups = Object.keys(chats);
+      const groups = Object.keys(
+        await client.groupFetchAllParticipating()
+      );
 
       let enviados = 0;
 
-      for (let id of groups) {
+      for (const jid of groups) {
         try {
           if (image) {
-            await client.sendMessage(
-              id,
-              {
-                image: { url: await client.downloadMediaMessage(m) },
-                caption: text || "",
-              }
-            );
+            await client.sendMessage(jid, {
+              image: image,   // ✅ BUFFER DIRECTO
+              caption: text || "",
+            });
           } else {
-            await client.sendMessage(id, { text });
+            await client.sendMessage(jid, { text });
           }
-
           enviados++;
         } catch (e) {
-          console.log("Error enviando:", id, e);
+          console.log("Error enviando:", jid, e.message);
         }
       }
 
-      return m.reply(`📡 Mensaje enviado a *${enviados}* grupos.`);
+      return m.reply(`📡 Enviado a *${enviados}* grupos.`);
     }
   }
 };
