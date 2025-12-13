@@ -83,7 +83,7 @@ async function startBot() {
   if (!client.authState.creds.registered) {
     const phoneNumber = await question("📱 Ingresa tu número (ej: 521XXXXXXXXXX): ");
     try {
-      const pairing = await client.requestPairingCode(phoneNumber, "1234MINI");
+      const pairing = await client.requestPairingCode(phoneNumber, "1234YERX");
       log.success(`Código de emparejamiento: ${pairing} (expira en 15s)`);
     } catch (err) {
       log.error("Error al solicitar código de emparejamiento:", err);
