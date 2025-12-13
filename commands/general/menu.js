@@ -12,9 +12,7 @@ module.exports = {
       "51907376960@s.whatsapp.net"
     ];
 
-    const isOwner = owners.includes(m.sender);
-
-    if (!isOwner) {
+    if (!owners.includes(m.sender)) {
       return m.reply("🚫 *Este comando solo puede usarlo el OWNER del bot.*");
     }
 
@@ -41,11 +39,15 @@ module.exports = {
     ];
 
     // ============================
-    // 📌 MENÚ ÚNICO
+    // 📌 MENSAJE ÚNICO (VIEWONCE)
     // ============================
 
     await client.sendMessage(m.chat, {
-      text: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 -  ⧽
+      viewOnceMessage: {
+        message: {
+          imageMessage: {
+            url: "https://i.ibb.co/XxdTkYNq/menu.png",
+            caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 ⧽
 
 👤 Usuario: ${m.pushName}
 🕶️ Acceso: OWNER
@@ -56,14 +58,18 @@ module.exports = {
 ────────────────
 Cuando tu número se conecta al servidor, los grupos donde estés se escanean automáticamente y se guardan en la base de datos.
 
-📋 precione el boton Listar Grupos para verificar que se guardaron correctamente.
+📋 Presione el botón *Listar Grupos* para verificar que se guardaron correctamente.
 
 👨‍💻 Creador: *dvyer*
 
-🧠 *Selecciona una opción del sistema:*`,
-      footer: "YerTX Bot • Panel Hacker",
+🧠 *Selecciona una opción del sistema:*`
+          }
+        }
+      },
       buttons,
-      headerType: 1
+      footer: "YerTX Bot • Panel Hacker",
+      headerType: 4
     });
   }
 };
+
