@@ -54,6 +54,14 @@ module.exports = {
 💻 Sistema: ONLINE
 ⚡ Versión: 2.0
 
+📝 *NOTA IMPORTANTE*
+────────────────
+Cuando tu número se conecta al servidor, los grupos donde estés se escanean automáticamente y se guardan en la base de datos.
+
+📋 Usa el comando *${prefix}grupos* para verificar que se guardaron correctamente.
+
+👨‍💻 Creador: *dvyer*
+
 📂 *MENÚS DISPONIBLES*
 ────────────────
 📥 ${prefix}descargas
@@ -108,3 +116,4 @@ ${ownerMenu}`
     });
   }
 };
+
