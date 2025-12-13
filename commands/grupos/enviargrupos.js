@@ -4,88 +4,88 @@ module.exports = {
 
   run: async (client, m) => {
     const sender = m.sender || m.key.remoteJid;
-
-    // ⏱️ función delay
     const delay = ms => new Promise(res => setTimeout(res, ms));
 
-    // INICIAR PROCESO
-    if (!global._enviar[sender]) {
-      global._enviar[sender] = { step: 1 };
+    const body =
+      m.message?.conversation ||
+      m.message?.extendedTextMessage?.text ||
+      m.message?.imageMessage?.caption ||
+      "";
+
+    const isCommand = /^[.!/#/]/.test(body);
+
+    // ==============================
+    // 1️⃣ INICIAR PROCESO
+    // ==============================
+    if (isCommand && body.includes("enviaragrupos") && !global._enviar[sender]) {
+      global._enviar[sender] = { waiting: true };
+
       return m.reply(
-        "📤 *Enviar a grupos activado*\n\n" +
+        "📤 *Modo enviar a grupos activado*\n\n" +
         "Ahora envíame:\n" +
-        "👉 Texto o\n👉 Imagen con texto\n\n" +
-        "Se reenviará a todos los grupos."
+        "👉 Un texto\n" +
+        "👉 O una imagen con texto\n\n" +
+        "❌ No envíes comandos."
       );
     }
 
-    // PASO 1 → CAPTURAR MENSAJE
-    if (global._enviar[sender].step === 1) {
-      const imgMsg = m.message?.imageMessage;
+    // ==============================
+    // 2️⃣ ESPERAR MENSAJE REAL
+    // ==============================
+    if (!global._enviar[sender]?.waiting) return;
 
-      const text =
-        m.message?.conversation ||
-        m.message?.extendedTextMessage?.text ||
-        imgMsg?.caption ||
-        "";
+    // ❌ ignorar comandos
+    if (isCommand) return;
 
-      if (!imgMsg && !text) {
-        return m.reply("⚠️ Envíame texto o una imagen.");
-      }
+    const imgMsg = m.message?.imageMessage;
+    const text = body?.trim();
 
-      let imageBuffer = null;
-
-      // 🔥 DESCARGAR IMAGEN COMO BUFFER (CORRECTO)
-      if (imgMsg) {
-        imageBuffer = await client.downloadMediaMessage(m);
-      }
-
-      global._enviar[sender] = {
-        step: 2,
-        image: imageBuffer,
-        text,
-      };
-
-      return m.reply(
-        "✅ Mensaje recibido.\n" +
-        "📡 Enviando a grupos con retraso de *10 segundos* por grupo..."
-      );
+    if (!imgMsg && !text) {
+      return m.reply("⚠️ Envía texto o una imagen.");
     }
 
-    // PASO 2 → ENVIAR A TODOS LOS GRUPOS
-    if (global._enviar[sender].step === 2) {
-      const { image, text } = global._enviar[sender];
-      delete global._enviar[sender];
-      delete global._enviar_warned?.[sender];
+    let imageBuffer = null;
+    if (imgMsg) {
+      imageBuffer = await client.downloadMediaMessage(m);
+    }
 
-      const groups = Object.keys(
-        await client.groupFetchAllParticipating()
-      );
+    // 🔒 cerrar sesión ANTES de enviar
+    delete global._enviar[sender];
+    delete global._enviar_warned?.[sender];
 
-      let enviados = 0;
+    const groups = Object.keys(
+      await client.groupFetchAllParticipating()
+    );
 
-      for (const jid of groups) {
-        try {
-          if (image) {
-            await client.sendMessage(jid, {
-              image: image,   // ✅ BUFFER DIRECTO
-              caption: text || "",
-            });
-          } else {
-            await client.sendMessage(jid, { text });
-          }
+    let enviados = 0;
 
-          enviados++;
+    await m.reply(
+      `📡 Enviando a *${groups.length}* grupos\n` +
+      `⏱ Retraso: 10 segundos por grupo`
+    );
 
-          // ⏳ RETRASO DE 10 SEGUNDOS (ANTI-BAN)
-          await delay(10_000);
-
-        } catch (e) {
-          console.log("❌ Error enviando:", jid, e.message);
+    // ==============================
+    // 3️⃣ ENVÍO CONTROLADO
+    // ==============================
+    for (const jid of groups) {
+      try {
+        if (imageBuffer) {
+          await client.sendMessage(jid, {
+            image: imageBuffer,
+            caption: text || ""
+          });
+        } else {
+          await client.sendMessage(jid, { text });
         }
-      }
 
-      return m.reply(`📡 Enviado a *${enviados}* grupos con seguridad.`);
+        enviados++;
+        await delay(10_000); // 🛡️ anti-ban
+
+      } catch (e) {
+        console.log("❌ Error enviando a", jid, e.message);
+      }
     }
+
+    return m.reply(`✅ Enviado correctamente a *${enviados}* grupos.`);
   }
 };
