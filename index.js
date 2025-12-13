@@ -1,18 +1,19 @@
 require("./settings");
 require("./lib/database");
-require("./autopost"); // ✅ autopost activo
+require("./autopost"); // autopost activo
 
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   jidDecode,
-  DisconnectReason,
+  DisconnectReason
 } = require("@whiskeysockets/baileys");
 
 const pino = require("pino");
 const chalk = require("chalk");
 const fs = require("fs");
+const path = require("path");
 const readline = require("readline");
 const os = require("os");
 const { Boom } = require("@hapi/boom");
@@ -21,40 +22,37 @@ const { smsg } = require("./lib/message");
 const mainHandler = require("./main");
 
 // ========================
-//   SISTEMA DE GRUPOS
+// SISTEMA DE GRUPOS
 // ========================
 const gruposFile = "./data/grupos.json";
 if (!fs.existsSync("./data")) fs.mkdirSync("./data");
 if (!fs.existsSync(gruposFile)) fs.writeFileSync(gruposFile, "[]");
 
 global.gruposAuto = JSON.parse(fs.readFileSync(gruposFile));
-
 function guardarGrupos() {
   fs.writeFileSync(gruposFile, JSON.stringify(global.gruposAuto, null, 2));
 }
-// ========================
 
 // ========================
-//   UTILIDADES
+// FUNCIONES AUX
 // ========================
 const question = (text) => {
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
+    output: process.stdout
   });
   return new Promise((resolve) => rl.question(text, resolve));
 };
 
 const log = {
-  success: (msg) => console.log(chalk.bgGreen.black(" SUCCESS "), chalk.green(msg)),
-  warn: (msg) => console.log(chalk.bgYellow.black(" WARN "), chalk.yellow(msg)),
-  error: (msg) => console.log(chalk.bgRed.white(" ERROR "), chalk.red(msg)),
+  info: (msg) => console.log(chalk.bgBlue.white(`INFO`), chalk.white(msg)),
+  success: (msg) => console.log(chalk.bgGreen.white(`SUCCESS`), chalk.greenBright(msg)),
+  warn: (msg) => console.log(chalk.bgYellowBright.blueBright(`WARNING`), chalk.yellow(msg)),
+  error: (msg) => console.log(chalk.bgRed.white(`ERROR`), chalk.redBright(msg))
 };
-// ========================
-
 
 // ========================
-//   INICIO DEL BOT
+// INICIO BOT
 // ========================
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(global.sessionName);
@@ -63,84 +61,90 @@ async function startBot() {
   const client = makeWASocket({
     version,
     logger: pino({ level: "silent" }),
-    printQRInTerminal: true,
+    printQRInTerminal: false,
     browser: ["Linux", "Chrome"],
-    auth: state,
+    auth: state
   });
 
-  // =================================================
-  // 🔥 FIX CRÍTICO — decodeJid (OBLIGATORIO PARA smsg)
-  // =================================================
+  // Fix smsg
   client.decodeJid = (jid) => {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
-      const decoded = jidDecode(jid) || {};
-      return decoded.user && decoded.server
-        ? decoded.user + "@" + decoded.server
-        : jid;
+      const decode = jidDecode(jid) || {};
+      return decode.user && decode.server ? decode.user + "@" + decode.server : jid;
     }
     return jid;
   };
-  // =================================================
 
-  // 🔑 Necesario para autopost / enviaragrupos
+  // GLOBAL
   global.client = client;
 
-  // ========================
-  //   EMPAREJAMIENTO
-  // ========================
+  // Emparejamiento solo si no hay sesión
   if (!client.authState.creds.registered) {
-    const phoneNumber = await question(
-      "📱 Ingresa tu número (ej: 519XXXXXXXX): "
-    );
-    const code = await client.requestPairingCode(phoneNumber);
-    console.log(chalk.green("Código de emparejamiento:"), code);
+    const phoneNumber = await question("📱 Ingresa tu número (ej: 521XXXXXXXXXX): ");
+    try {
+      const pairing = await client.requestPairingCode(phoneNumber, "1234MINI");
+      log.success(`Código de emparejamiento: ${pairing} (expira en 15s)`);
+    } catch (err) {
+      log.error("Error al solicitar código de emparejamiento:", err);
+      exec("rm -rf ./lurus_session/*");
+      process.exit(1);
+    }
   }
 
   await global.loadDatabase();
+  log.info("Base de datos cargada correctamente.");
 
   // ========================
-  //   CONEXIÓN
+  // CONEXIÓN
   // ========================
   client.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
 
     if (connection === "close") {
       const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
-      log.warn("Conexión cerrada, reconectando...");
-      startBot();
-      return;
+
+      if ([DisconnectReason.connectionLost, DisconnectReason.connectionClosed, DisconnectReason.restartRequired, DisconnectReason.timedOut, DisconnectReason.badSession].includes(reason)) {
+        log.warn("Reconectando...");
+        startBot();
+        return;
+      }
+
+      if ([DisconnectReason.loggedOut, DisconnectReason.forbidden, DisconnectReason.multideviceMismatch].includes(reason)) {
+        log.error("Sesión cerrada. Elimina la carpeta de sesión y vuelve a escanear.");
+        exec("rm -rf ./lurus_session/*");
+        process.exit(1);
+      }
+
+      client.end(`Motivo desconocido: ${reason}`);
     }
 
     if (connection === "open") {
-      log.success("Conectado correctamente");
+      log.success("Conectado correctamente!");
 
-      // 🔍 ESCANEAR TODOS LOS GRUPOS
+      // Escanear y guardar grupos automáticamente
       const grupos = await client.groupFetchAllParticipating();
       let nuevos = 0;
 
       for (const jid in grupos) {
         if (!jid.endsWith("@g.us")) continue;
-
         if (!global.gruposAuto.find(g => g.jid === jid)) {
           global.gruposAuto.push({
             jid,
             nombre: grupos[jid]?.subject || "Grupo sin nombre",
-            fecha: Date.now(),
+            fecha: Date.now()
           });
           nuevos++;
         }
       }
 
       guardarGrupos();
-      console.log(
-        chalk.green(`📦 Grupos detectados y guardados: ${nuevos}`)
-      );
+      log.success(`📦 Grupos detectados y guardados: ${nuevos}`);
     }
   });
 
   // ========================
-  //   MENSAJES
+  // MENSAJES
   // ========================
   client.ev.on("messages.upsert", async ({ messages }) => {
     try {
@@ -148,13 +152,13 @@ async function startBot() {
       if (!m.message) return;
 
       m.message = m.message.ephemeralMessage?.message || m.message;
+
       if (m.key.remoteJid === "status@broadcast") return;
 
-      // 🔥 smsg YA FUNCIONA (decodeJid existe)
       m = smsg(client, m);
       await mainHandler(client, m);
-    } catch (e) {
-      console.log("Error handler:", e);
+    } catch (err) {
+      log.error("Error en handler:", err);
     }
   });
 
@@ -162,3 +166,4 @@ async function startBot() {
 }
 
 startBot();
+
