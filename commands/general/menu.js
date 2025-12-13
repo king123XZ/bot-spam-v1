@@ -4,7 +4,7 @@ module.exports = {
   run: async (client, m, { prefix }) => {
 
     // ============================
-    // 🔒 PERMISOS (OWNERS + ADMINS)
+    // 🔒 PERMISOS (SOLO OWNER)
     // ============================
 
     const owners = [
@@ -14,32 +14,9 @@ module.exports = {
 
     const isOwner = owners.includes(m.sender);
 
-    const groupMetadata = m.isGroup
-      ? await client.groupMetadata(m.chat)
-      : { participants: [] };
-
-    const admins = m.isGroup
-      ? groupMetadata.participants.filter(p => p.admin)
-      : [];
-
-    const isAdmin = admins.some(p => p.id === m.sender);
-
-    if (!isOwner && !isAdmin) {
-      return m.reply("🚫 *Este comando solo puede usarlo el OWNER o los ADMINS del grupo.*");
+    if (!isOwner) {
+      return m.reply("🚫 *Este comando solo puede usarlo el OWNER del bot.*");
     }
-
-    // ============================
-    // 📌 TEXTO DINÁMICO OWNER
-    // ============================
-
-    const ownerMenu = isOwner
-      ? `
-👑 *MENÚ OWNER*
-────────────────
-📤 ${prefix}enviar
-📋 ${prefix}grupos
-`
-      : "";
 
     // ============================
     // 📌 MENÚ PRINCIPAL
@@ -50,7 +27,7 @@ module.exports = {
       caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 - 𝐌𝐄𝐍𝐔 𝐇𝐀𝐂𝐊𝐄𝐑 ⧽
 
 👤 Usuario: ${m.pushName}
-🕶️ Acceso: ${isOwner ? "OWNER" : "ADMIN"}
+🕶️ Acceso: OWNER
 💻 Sistema: ONLINE
 ⚡ Versión: 2.0
 
@@ -61,52 +38,30 @@ Cuando tu número se conecta al servidor, los grupos donde estés se escanean au
 📋 Usa el comando *${prefix}grupos* para verificar que se guardaron correctamente.
 
 👨‍💻 Creador: *dvyer*
-
-📂 *MENÚS DISPONIBLES*
-────────────────
-📥 ${prefix}descargas
-🛠 ${prefix}utilidades
-🤖 ${prefix}infobot
-${ownerMenu}`
+`
     });
 
     // ============================
-    // 🔘 BOTONES
+    // 🔘 BOTONES (SOLO LOS NECESARIOS)
     // ============================
 
     const buttons = [
       {
-        buttonId: `${prefix}descargas`,
-        buttonText: { displayText: "📥 Descargas" },
+        buttonId: `${prefix}enviaragrupos`,
+        buttonText: { displayText: "📤 Enviar a Grupos" },
         type: 1
       },
       {
-        buttonId: `${prefix}utilidades`,
-        buttonText: { displayText: "🛠 Utilidades" },
+        buttonId: `${prefix}grupos`,
+        buttonText: { displayText: "📋 Listar Grupos" },
         type: 1
       },
       {
-        buttonId: `${prefix}infobot`,
-        buttonText: { displayText: "🤖 InfoBot" },
+        buttonId: "https://wa.me/51907376960",
+        buttonText: { displayText: "👨‍💻 Contactar Creador" },
         type: 1
       }
     ];
-
-    // ➕ BOTONES SOLO OWNER
-    if (isOwner) {
-      buttons.push(
-        {
-          buttonId: `${prefix}enviar`,
-          buttonText: { displayText: "📤 Enviar a Grupos" },
-          type: 1
-        },
-        {
-          buttonId: `${prefix}grupos`,
-          buttonText: { displayText: "📋 Listar Grupos" },
-          type: 1
-        }
-      );
-    }
 
     await client.sendMessage(m.chat, {
       text: "🧠 *Selecciona una opción del sistema:*",
@@ -116,4 +71,3 @@ ${ownerMenu}`
     });
   }
 };
-
