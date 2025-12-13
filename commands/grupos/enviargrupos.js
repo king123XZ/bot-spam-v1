@@ -17,12 +17,12 @@ module.exports = {
     // ============================
     const buttons = [
       {
-        buttonId: `${prefix}enviaragrupos`,
+        buttonId: `${prefix}.enviaragrupos`,
         buttonText: { displayText: "📤 Enviar a Grupos" },
         type: 1
       },
       {
-        buttonId: `${prefix}listargrupos`,
+        buttonId: `${prefix}.listargrupos`,
         buttonText: { displayText: "📋 Listar Grupos" },
         type: 1
       }
