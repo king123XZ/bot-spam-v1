@@ -68,14 +68,31 @@ async function startBot() {
     auth: state,
   });
 
-  // 🔥 CLAVE PARA AUTPOST Y GRUPOS
+  // =================================================
+  // 🔥 FIX CRÍTICO — decodeJid (OBLIGATORIO PARA smsg)
+  // =================================================
+  client.decodeJid = (jid) => {
+    if (!jid) return jid;
+    if (/:\d+@/gi.test(jid)) {
+      const decoded = jidDecode(jid) || {};
+      return decoded.user && decoded.server
+        ? decoded.user + "@" + decoded.server
+        : jid;
+    }
+    return jid;
+  };
+  // =================================================
+
+  // 🔑 Necesario para autopost / enviaragrupos
   global.client = client;
 
   // ========================
   //   EMPAREJAMIENTO
   // ========================
   if (!client.authState.creds.registered) {
-    const phoneNumber = await question("📱 Ingresa tu número (ej: 519XXXXXXXX): ");
+    const phoneNumber = await question(
+      "📱 Ingresa tu número (ej: 519XXXXXXXX): "
+    );
     const code = await client.requestPairingCode(phoneNumber);
     console.log(chalk.green("Código de emparejamiento:"), code);
   }
@@ -92,6 +109,7 @@ async function startBot() {
       const reason = new Boom(lastDisconnect?.error)?.output.statusCode;
       log.warn("Conexión cerrada, reconectando...");
       startBot();
+      return;
     }
 
     if (connection === "open") {
@@ -115,7 +133,9 @@ async function startBot() {
       }
 
       guardarGrupos();
-      console.log(chalk.green(`📦 Grupos detectados y guardados: ${nuevos}`));
+      console.log(
+        chalk.green(`📦 Grupos detectados y guardados: ${nuevos}`)
+      );
     }
   });
 
@@ -130,6 +150,7 @@ async function startBot() {
       m.message = m.message.ephemeralMessage?.message || m.message;
       if (m.key.remoteJid === "status@broadcast") return;
 
+      // 🔥 smsg YA FUNCIONA (decodeJid existe)
       m = smsg(client, m);
       await mainHandler(client, m);
     } catch (e) {
