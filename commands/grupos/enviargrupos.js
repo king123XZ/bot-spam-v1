@@ -1,57 +1,96 @@
 module.exports = {
-  command: ["menu", "help", "ayuda", "panel"],
+  command: ["enviaragrupos"],
+  isOwner: true,
 
-  run: async (client, m, { prefix }) => {
+  run: async (client, m) => {
+    const sender = m.sender;
 
-    const owners = [
-      "51917391317@s.whatsapp.net",
-      "51907376960@s.whatsapp.net"
-    ];
+    // inicializar memoria global
+    global._enviar = global._enviar || {};
 
-    if (!owners.includes(m.sender)) {
-      return m.reply("🚫 *Este comando solo puede usarlo el OWNER del bot.*");
+    const delay = ms => new Promise(res => setTimeout(res, ms));
+
+    // ============================
+    // PASO 1: ACTIVAR MODO ENVÍO
+    // ============================
+    if (!global._enviar[sender]) {
+      global._enviar[sender] = { step: 1 };
+
+      return m.reply(
+        "📤 *Modo enviar a grupos activado*\n\n" +
+        "Ahora envíame:\n" +
+        "👉 Un texto\n" +
+        "👉 O una imagen con texto\n\n" +
+        "⛔ No envíes comandos."
+      );
     }
 
     // ============================
-    // 🔘 BOTONES (LLAMAN COMANDOS)
+    // PASO 2: CAPTURAR MENSAJE
     // ============================
-    const buttons = [
-      {
-        buttonId: `${prefix}.enviaragrupos`,
-        buttonText: { displayText: "📤 Enviar a Grupos" },
-        type: 1
-      },
-      {
-        buttonId: `${prefix}.listargrupos`,
-        buttonText: { displayText: "📋 Listar Grupos" },
-        type: 1
+    if (global._enviar[sender].step === 1) {
+      const imgMsg = m.message?.imageMessage;
+
+      const text =
+        m.message?.conversation ||
+        m.message?.extendedTextMessage?.text ||
+        imgMsg?.caption ||
+        "";
+
+      if (!imgMsg && !text) {
+        return m.reply("⚠️ Envía texto o una imagen con texto.");
       }
-    ];
 
-    // ============================
-    // 📌 MENÚ ÚNICO CON IMAGEN
-    // ============================
-    await client.sendMessage(m.chat, {
-      image: { url: "https://i.ibb.co/XxdTkYNq/menu.png" },
-      caption: `⧼ 𝐘𝐞𝐫𝐓𝐗 𝐁𝐎𝐓 ⧽
+      let imageBuffer = null;
 
-👤 Usuario: ${m.pushName}
-🕶️ Acceso: OWNER
-💻 Sistema: ONLINE
-⚡ Versión: 1.00
+      if (imgMsg) {
+        imageBuffer = await client.downloadMediaMessage(m);
+      }
 
-📝 *NOTA IMPORTANTE*
-────────────────
-Cuando tu número se conecta al servidor, los grupos donde estés se escanean automáticamente y se guardan en la base de datos.
+      global._enviar[sender] = {
+        step: 2,
+        text,
+        image: imageBuffer
+      };
 
-📋 Presiona *Listar Grupos* para verificar que se guardaron correctamente.
+      // ============================
+      // PASO 3: ENVIAR A GRUPOS
+      // ============================
+      const groups = Object.keys(
+        await client.groupFetchAllParticipating()
+      );
 
-👨‍💻 Creador: *dvyer*
+      let enviados = 0;
 
-🧠 *Selecciona una opción del sistema:*`,
-      footer: "YerTX Bot • Panel Hacker",
-      buttons,
-      headerType: 4
-    });
+      await m.reply(
+        `📡 Enviando a *${groups.length}* grupos\n` +
+        `⏱ Retraso: 10 segundos por grupo`
+      );
+
+      for (const jid of groups) {
+        try {
+          if (imageBuffer) {
+            await client.sendMessage(jid, {
+              image: imageBuffer,
+              caption: text || ""
+            });
+          } else {
+            await client.sendMessage(jid, { text });
+          }
+
+          enviados++;
+          await delay(10_000); // 🛡️ ANTI-BAN
+        } catch (e) {
+          console.log("❌ Error enviando a", jid, e.message);
+        }
+      }
+
+      delete global._enviar[sender];
+
+      return m.reply(
+        `✅ Enviado correctamente a *${enviados}* grupos.`
+      );
+    }
   }
 };
+
