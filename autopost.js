@@ -1,36 +1,80 @@
 const fs = require("fs");
+
 const DB_PATH = "./data/grupos.json";
+const DELAY = 8000; // ⏳ 8 segundos (ANTI-BAN SEGURO)
+
+// ====== preparar DB ======
+if (!fs.existsSync("./data")) fs.mkdirSync("./data");
+if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, "[]");
 
 global.gruposAuto = JSON.parse(fs.readFileSync(DB_PATH));
 
 const mensajeAuto = `
 🔥 *Mensaje Automático*
-Este mensaje se envía SOLO UNA VEZ por grupo.
+Este mensaje se envía solo una vez.
 `;
 
-const intervalo = 300000; // 5 minutos
+const delay = ms => new Promise(r => setTimeout(r, ms));
 
-setInterval(async () => {
-  if (!global.client) return;
-  if (!global.gruposAuto.length) return;
+// ====== PROCESO PRINCIPAL ======
+async function autoGuardarYEnviar() {
+  if (!global.client?.user) return;
 
-  for (const grupo of [...global.gruposAuto]) {
+  console.log("🔍 Escaneando grupos...");
+
+  const grupos = await global.client.groupFetchAllParticipating();
+  const existentes = new Set(global.gruposAuto.map(g => g.jid));
+
+  const pendientes = [];
+
+  for (const jid in grupos) {
+    if (!jid.endsWith("@g.us")) continue;
+    if (existentes.has(jid)) continue;
+
+    pendientes.push({
+      jid,
+      nombre: grupos[jid]?.subject || "Grupo sin nombre",
+      enviado: false
+    });
+  }
+
+  if (!pendientes.length) {
+    console.log("✅ No hay grupos nuevos.");
+    return;
+  }
+
+  const tiempoTotal = Math.ceil((pendientes.length * DELAY) / 1000);
+
+  console.log(`📦 Grupos nuevos: ${pendientes.length}`);
+  console.log(`⏳ Tiempo estimado: ${tiempoTotal} segundos`);
+
+  let enviados = 0;
+
+  for (const grupo of pendientes) {
     try {
       await global.client.sendMessage(grupo.jid, { text: mensajeAuto });
 
-      console.log("✅ Enviado a:", grupo.nombre);
+      grupo.enviado = true;
+      global.gruposAuto.push(grupo);
 
-      // eliminar grupo luego de enviar
-      global.gruposAuto = global.gruposAuto.filter(g => g.jid !== grupo.jid);
       fs.writeFileSync(DB_PATH, JSON.stringify(global.gruposAuto, null, 2));
 
-      // delay anti-ban
-      await new Promise(r => setTimeout(r, 4000));
+      enviados++;
+      console.log(
+        `✅ [${enviados}/${pendientes.length}] Enviado → ${grupo.nombre}`
+      );
 
+      await delay(DELAY);
     } catch (e) {
-      console.log("❌ Error:", grupo.nombre, e.message);
+      console.log("❌ Error en", grupo.jid, e.message);
     }
   }
-}, intervalo);
 
-console.log("✅ AutoPost activo (modo seguro)");
+  console.log("🎉 Proceso terminado.");
+}
+
+// ====== ejecutar SOLO UNA VEZ al iniciar ======
+setTimeout(autoGuardarYEnviar, 20_000);
+
+module.exports = {};
+
