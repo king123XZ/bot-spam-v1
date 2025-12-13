@@ -1,15 +1,11 @@
 const fs = require("fs");
-
 const DB_PATH = "./data/grupos.json";
-
-if (!fs.existsSync("./data")) fs.mkdirSync("./data");
-if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, "[]");
 
 global.gruposAuto = JSON.parse(fs.readFileSync(DB_PATH));
 
 const mensajeAuto = `
 🔥 *Mensaje Automático*
-Este es un mensaje enviado a todos los grupos detectados.
+Este mensaje se envía SOLO UNA VEZ por grupo.
 `;
 
 const intervalo = 300000; // 5 minutos
@@ -18,26 +14,23 @@ setInterval(async () => {
   if (!global.client) return;
   if (!global.gruposAuto.length) return;
 
-  console.log("📤 Iniciando envío automático...");
-
-  const pendientes = [...global.gruposAuto];
-
-  for (const grupo of pendientes) {
+  for (const grupo of [...global.gruposAuto]) {
     try {
-      await global.client.sendMessage(grupo, { text: mensajeAuto });
-      console.log("✅ Mensaje enviado a:", grupo);
+      await global.client.sendMessage(grupo.jid, { text: mensajeAuto });
 
-      // 🔥 ELIMINAR GRUPO DESPUÉS DE ENVIAR
-      global.gruposAuto = global.gruposAuto.filter(g => g !== grupo);
+      console.log("✅ Enviado a:", grupo.nombre);
+
+      // eliminar grupo luego de enviar
+      global.gruposAuto = global.gruposAuto.filter(g => g.jid !== grupo.jid);
       fs.writeFileSync(DB_PATH, JSON.stringify(global.gruposAuto, null, 2));
 
-      // ⏳ pequeño delay para evitar spam
-      await new Promise(res => setTimeout(res, 3000));
+      // delay anti-ban
+      await new Promise(r => setTimeout(r, 4000));
 
     } catch (e) {
-      console.log("❌ Error enviando a", grupo, e.message);
+      console.log("❌ Error:", grupo.nombre, e.message);
     }
   }
 }, intervalo);
 
-console.log("✅ AutoPost iniciado correctamente");
+console.log("✅ AutoPost activo (modo seguro)");
