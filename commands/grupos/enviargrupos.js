@@ -64,7 +64,7 @@ module.exports = {
 
       await m.reply(
         `📡 Enviando a *${groups.length}* grupos\n` +
-        `⏱ Retraso: 10 segundos por grupo`
+        `⏱ Retraso: 20 segundos por grupo`
       );
 
       for (const jid of groups) {
@@ -79,7 +79,7 @@ module.exports = {
           }
 
           enviados++;
-          await delay(10_000); // 🛡️ ANTI-BAN
+          await delay(20_000); // 🛡️ ANTI-BAN
         } catch (e) {
           console.log("❌ Error enviando a", jid, e.message);
         }
